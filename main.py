@@ -35,6 +35,7 @@ def get_places(city):
 
     response = requests.get(url, params=params)
     data = response.json()
+    print("Google Places response:", data)
 
     places = []
 
