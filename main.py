@@ -24,6 +24,10 @@ app.add_middleware(
 def home():
     return {"message": "Tour AI is running 🚀"}
 
+
+# ----------------------------
+# Google Places
+# ----------------------------
 def get_places(city):
     google_key = os.getenv("GOOGLE_API_KEY")
 
@@ -36,7 +40,6 @@ def get_places(city):
 
     response = requests.get(url, params=params)
     data = response.json()
-    print("Google Places response:", data)
 
     places = []
 
@@ -45,6 +48,10 @@ def get_places(city):
 
     return places
 
+
+# ----------------------------
+# YouTube Videos
+# ----------------------------
 def get_youtube_videos(place_name):
     google_key = os.getenv("GOOGLE_API_KEY")
 
@@ -69,10 +76,12 @@ def get_youtube_videos(place_name):
 
     return videos
 
-from openai import OpenAI
 
+# ----------------------------
+# Cost Estimation Tool
+# ----------------------------
 def estimate_trip_cost(city, days):
-    # Simple estimation logic
+
     base_per_day = 3000  # ₹ per day estimate
 
     total_cost = base_per_day * days
@@ -91,6 +100,10 @@ def estimate_trip_cost(city, days):
 
     return breakdown
 
+
+# ----------------------------
+# AI Agent Endpoint
+# ----------------------------
 @app.get("/plan")
 def plan(query: str):
 
@@ -143,7 +156,7 @@ def plan(query: str):
     messages = [
         {
             "role": "system",
-            "content": "You are an intelligent luxury travel planning AI agent. Use tools when needed."
+            "content": "You are an intelligent luxury travel planning AI agent. Use tools when needed to gather real-world information before answering."
         },
         {
             "role": "user",
