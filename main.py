@@ -1,3 +1,4 @@
+import json
 import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,21 +69,100 @@ def get_youtube_videos(place_name):
 
     return videos
 
-@app.get("/plan")
-def plan(city: str):
-    places = get_places(city)
+from openai import OpenAI
 
-    detailed_places = []
+def estimate_trip_cost(city, days):
+    # Simple estimation logic
+    base_per_day = 3000  # ₹ per day estimate
 
-    for place in places:
-        videos = get_youtube_videos(place)
+    total_cost = base_per_day * days
 
-        detailed_places.append({
-            "name": place,
-            "videos": videos
-        })
-
-    return {
+    breakdown = {
         "city": city,
-        "places": detailed_places
+        "days": days,
+        "estimated_total_cost": total_cost,
+        "breakdown": {
+            "stay": int(total_cost * 0.4),
+            "food": int(total_cost * 0.2),
+            "travel": int(total_cost * 0.2),
+            "activities": int(total_cost * 0.2)
+        }
     }
+
+    return breakdown
+
+@app.get("/plan")
+def plan(query: str):
+
+    def generate():
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_places",
+                    "description": "Get top tourist places for a given city",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"}
+                        },
+                        "required": ["city"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_youtube_videos",
+                    "description": "Get travel guide YouTube videos for a place",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "place_name": {"type": "string"}
+                        },
+                        "required": ["place_name"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "estimate_trip_cost",
+                    "description": "Estimate approximate total trip cost for a city based on number of days",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string"},
+                            "days": {"type": "integer"}
+                        },
+                        "required": ["city", "days"]
+                    }
+                }
+            }
+        ]
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an intelligent luxury travel planning AI agent. Use tools when needed."
+            },
+            {
+                "role": "user",
+                "content": query
+            }
+        ]
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            stream=True
+        )
+
+        for chunk in response:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    return StreamingResponse(generate(), media_type="text/plain")
