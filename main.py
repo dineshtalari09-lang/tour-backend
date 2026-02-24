@@ -94,75 +94,104 @@ def estimate_trip_cost(city, days):
 @app.get("/plan")
 def plan(query: str):
 
-    def generate():
-
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_places",
-                    "description": "Get top tourist places for a given city",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "city": {"type": "string"}
-                        },
-                        "required": ["city"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_youtube_videos",
-                    "description": "Get travel guide YouTube videos for a place",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "place_name": {"type": "string"}
-                        },
-                        "required": ["place_name"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "estimate_trip_cost",
-                    "description": "Estimate approximate total trip cost for a city based on number of days",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "city": {"type": "string"},
-                            "days": {"type": "integer"}
-                        },
-                        "required": ["city", "days"]
-                    }
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_places",
+                "description": "Get top tourist places for a given city",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"}
+                    },
+                    "required": ["city"]
                 }
             }
-        ]
-
-        messages = [
-            {
-                "role": "system",
-                "content": "You are an intelligent luxury travel planning AI agent. Use tools when needed."
-            },
-            {
-                "role": "user",
-                "content": query
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_youtube_videos",
+                "description": "Get travel guide YouTube videos for a place",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "place_name": {"type": "string"}
+                    },
+                    "required": ["place_name"]
+                }
             }
-        ]
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "estimate_trip_cost",
+                "description": "Estimate approximate total trip cost for a city based on number of days",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"},
+                        "days": {"type": "integer"}
+                    },
+                    "required": ["city", "days"]
+                }
+            }
+        }
+    ]
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an intelligent luxury travel planning AI agent. Use tools when needed."
+        },
+        {
+            "role": "user",
+            "content": query
+        }
+    ]
+
+    while True:
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
             tools=tools,
-            tool_choice="auto",
-            stream=True
+            tool_choice="auto"
         )
 
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        message = response.choices[0].message
 
-    return StreamingResponse(generate(), media_type="text/plain")
+        if message.tool_calls:
+
+            messages.append({
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": message.tool_calls
+            })
+
+            for tool_call in message.tool_calls:
+
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments)
+
+                if tool_name == "get_places":
+                    result = get_places(**tool_args)
+
+                elif tool_name == "get_youtube_videos":
+                    result = get_youtube_videos(**tool_args)
+
+                elif tool_name == "estimate_trip_cost":
+                    result = estimate_trip_cost(**tool_args)
+
+                else:
+                    result = "Tool not found"
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
+
+        else:
+            return {"response": message.content}
